@@ -1,0 +1,9 @@
+*.zip
+*.pt
+*.mp4
+*.png
+*.jpg
+*.jpeg
+env
+*.json
+*.bat
