@@ -10,14 +10,14 @@ import cv2, random
 
 import config
 import similarity
-import model
+import python27.model as model
 import IPython
 
 from scipy import spatial
 
 
-from data import Dataset, TripletData, PairData
-import data
+from python27.data import Dataset, TripletData, PairData
+import python27.data as data
 import shutil
 
 flags = tf.app.flags
