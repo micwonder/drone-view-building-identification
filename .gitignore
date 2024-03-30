@@ -7,3 +7,5 @@
 env
 *.json
 *.bat
+test.py
+__pycache__
