@@ -2,6 +2,7 @@ from ultralytics import YOLO
 import cv2
 import os
 from constants import *
+import threading
 
 
 def check_name(img_name: str):
@@ -48,8 +49,8 @@ def plot_rect(img, boxes, labels=None, colors=None, show_percent=True, confi=0.0
     for box in boxes:
         idx = int(box[-1])
         confidence = float(box[-2])
-        if confidence < confi:
-            continue  # Skip boxes with confidence lower than confi
+        # if confidence < confi:
+        #     continue  # Skip boxes with confidence lower than confi double check after model
 
         if show_percent:
             label = f"{labels.get(idx, '')} {round(100 * confidence, 1)}%"
@@ -64,54 +65,81 @@ def plot_rect(img, boxes, labels=None, colors=None, show_percent=True, confi=0.0
     return img
 
 
-def run_images():
-    if not os.path.exists(TARGET_PATH):
-        print("Not Exist.")
-        return
+# def run_images():
+#     if not os.path.exists(TARGET_PATH):
+#         print("Not Exist.")
+#         return
 
-    model = YOLO(model=MODEL_NAME)
-    label_map = model.model.names
-    print(len(label_map), label_map)
+#     model = YOLO(model=MODEL_NAME)
+#     label_map = model.model.names
+#     print(len(label_map), label_map)
 
-    img_paths = []
-    if not os.path.isdir(TARGET_PATH):
-        img_paths = [TARGET_PATH]
-    else:
-        img_names = os.listdir(TARGET_PATH)
-        for img_name in img_names:
-            if not check_name(img_name=img_name):
-                continue
+#     img_paths = []
+#     if not os.path.isdir(TARGET_PATH):
+#         img_paths = [TARGET_PATH]
+#     else:
+#         img_names = os.listdir(TARGET_PATH)
+#         for img_name in img_names:
+#             if not check_name(img_name=img_name):
+#                 continue
 
-            img_paths.append(os.path.join(TARGET_PATH, img_name))
+#             img_paths.append(os.path.join(TARGET_PATH, img_name))
 
-    window_cnt = 0
-    for img_path in img_paths:
-        img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+#     window_cnt = 0
+#     for img_path in img_paths:
+#         img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
 
-        results = model.predict(img_path)
-        print(results)
+#         results = model.predict(img_path)
+#         print(results)
 
-        img = plot_rect(
-            img=img,
-            boxes=results[0].boxes.data,
-            labels=label_map,
-            show_percent=True,
-            # confi=0.5,
-        )
-        height, width, channels = img.shape
-        img = cv2.resize(src=img, dsize=[min(1024, width), min(768, height)])
-        cv2.imshow(f"Drone View{window_cnt % 10}", img)
-        window_cnt += 1
+#         img = plot_rect(
+#             img=img,
+#             boxes=results[0].boxes.data,
+#             labels=label_map,
+#             show_percent=True,
+#             # confi=0.5,
+#         )
+#         height, width, channels = img.shape
+#         img = cv2.resize(src=img, dsize=[min(1024, width), min(768, height)])
+#         cv2.imshow(f"Drone View{window_cnt % 10}", img)
+#         window_cnt += 1
 
-    cv2.waitKey(0)
+#     cv2.waitKey(0)
 
-    cv2.destroyAllWindows()
+#     cv2.destroyAllWindows()
+
+
+class PredictProcessor:
+    def __init__(self, model) -> None:
+        self.model = model
+        self.frame_to_predict = None
+        self.predicted_results = None
+        self.lock = threading.Lock()
+
+    def predict(self):
+        while True:
+            with self.lock:
+                if self.frame_to_predict is None:
+                    continue
+                frame = self.frame_to_predict
+                self.frame_to_predict = None
+
+            # Perform prediction
+            results = self.model.predict(
+                frame, imgsz=IMAGE_SIZE, iou=IOU, conf=CONFIDENCE
+            )
+
+            with self.lock:
+                self.predicted_results = results
 
 
 def run_video():
     model = YOLO(model=MODEL_NAME)
     label_map = model.model.names
     # print(len(label_map), label_map)
+
+    processor = PredictProcessor(model=model)
+    threading.Thread(target=processor.predict, daemon=True).start()
 
     # define a video capture object
     vid = cv2.VideoCapture("Train\\thefredric_manual.mp4")
@@ -120,6 +148,8 @@ def run_video():
         return
         # lmain.after(10, CheckSource)
 
+    results = None
+
     while True:
 
         # Capture the video frame by frame
@@ -127,19 +157,28 @@ def run_video():
         if not ret:
             break
 
-        results = model.predict(frame)
-        # print(results)
+        with processor.lock:
+            if (
+                processor.frame_to_predict is None
+            ):  # Only update if the previous frame has been processed
+                processor.frame_to_predict = frame
+            if processor.predicted_results is not None:
+                results = processor.predicted_results
+                processor.predicted_results = None
 
-        img = plot_rect(
-            img=frame,
-            boxes=results[0].boxes.data,
-            labels=label_map,
-            show_percent=True,
-            # confi=0.5,
+        if results:
+            frame = plot_rect(
+                img=frame,
+                boxes=results[0].boxes.data,
+                labels=label_map,
+                show_percent=True,
+                # confi=0.3,
+            )
+        height, width, channels = frame.shape
+        frame = cv2.resize(
+            src=frame, dsize=[min(WINDOW_WIDTH, width), min(WINDOW_HEIGHT, height)]
         )
-        height, width, channels = img.shape
-        img = cv2.resize(src=img, dsize=[min(1024, width), min(768, height)])
-        cv2.imshow(f"Drone View", img)
+        cv2.imshow(f"Drone View", frame)
 
         # the 'q' button is set as the
         # quitting button you may use any
