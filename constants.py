@@ -1,8 +1,14 @@
 TARGET_PATH = "2"
 # TARGET_PATH = "Train/Annotated"
 # MODEL_NAME = "weights/yolov8x.pt"
-MODEL_NAME = "weights/yolov8-n-best.pt"
-# MODEL_NAME = "weights/yolov9-c-best.pt"
+# MODEL_NAME = "weights/yolov8-n-best.pt"
+MODEL_NAME = "weights/yolov9-c-best.pt"
+
+IMAGE_SIZE = 640
+CONFIDENCE = 0.5
+IOU = 0.7
+WINDOW_WIDTH = 1200
+WINDOW_HEIGHT = 800
 
 COLORS = [
     (67, 161, 255),
